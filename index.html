@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  
+  <title>Eastern</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+  <meta property="og:type" content="website">
+<meta property="og:title" content="Eastern">
+<meta property="og:url" content="http://yoursite.com/index.html">
+<meta property="og:site_name" content="Eastern">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Eastern">
+  
+    <link rel="alternate" href="/atom.xml" title="Eastern" type="application/atom+xml">
+  
+  
+    <link rel="icon" href="/favicon.png">
+  
+  
+    <link href="//fonts.googleapis.com/css?family=Source+Code+Pro" rel="stylesheet" type="text/css">
+  
+  <link rel="stylesheet" href="/css/style.css">
+  
+
+</head>
+
+<body>
+  <div id="container">
+    <div id="wrap">
+      <header id="header">
+  <div id="banner"></div>
+  <div id="header-outer" class="outer">
+    <div id="header-title" class="inner">
+      <h1 id="logo-wrap">
+        <a href="/" id="logo">Eastern</a>
+      </h1>
+      
+    </div>
+    <div id="header-inner" class="inner">
+      <nav id="main-nav">
+        <a id="main-nav-toggle" class="nav-icon"></a>
+        
+          <a class="main-nav-link" href="/">Home</a>
+        
+          <a class="main-nav-link" href="/archives">Archives</a>
+        
+      </nav>
+      <nav id="sub-nav">
+        
+          <a id="nav-rss-link" class="nav-icon" href="/atom.xml" title="RSS Feed"></a>
+        
+        <a id="nav-search-btn" class="nav-icon" title="Search"></a>
+      </nav>
+      <div id="search-form-wrap">
+        <form action="//google.com/search" method="get" accept-charset="UTF-8" class="search-form"><input type="search" name="q" class="search-form-input" placeholder="Search"><button type="submit" class="search-form-submit">&#xF002;</button><input type="hidden" name="sitesearch" value="http://yoursite.com"></form>
+      </div>
+    </div>
+  </div>
+</header>
+      <div class="outer">
+        <section id="main">
+  
+    <article id="android-ANR原理记录" class="article article-type-android" itemscope itemprop="blogPost">
+  <div class="article-meta">
+    <a href="/2017/09/26/ANR原理记录/" class="article-date">
+  <time datetime="2017-09-26T07:04:13.000Z" itemprop="datePublished">2017-09-26</time>
+</a>
+    
+  </div>
+  <div class="article-inner">
+    
+    
+      <header class="article-header">
+        
+  
+    <h1 itemprop="name">
+      <a class="article-title" href="/2017/09/26/ANR原理记录/">ANR原理记录</a>
+    </h1>
+  
+
+      </header>
+    
+    <div class="article-entry" itemprop="articleBody">
+      
+        <h3 id="ANR在哪里弹出来的？"><a href="#ANR在哪里弹出来的？" class="headerlink" title="ANR在哪里弹出来的？"></a>ANR在哪里弹出来的？</h3><figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div><div class="line">20</div><div class="line">21</div></pre></td><td class="code"><pre><div class="line">//源码位置ActivityManagerService$UiHandler#handleMessage()</div><div class="line">//它就是一个系统弹出的对话框。</div><div class="line">Intent intent = new Intent(&quot;android.intent.action.ANR&quot;);</div><div class="line">if (!mProcessesReady) &#123;</div><div class="line">   intent.addFlags(Intent.FLAG_RECEIVER_REGISTERED_ONLY</div><div class="line">           | Intent.FLAG_RECEIVER_FOREGROUND);</div><div class="line">                    &#125;</div><div class="line">   broadcastIntentLocked(null, null, intent,</div><div class="line">       null, null, 0, null, null, null, AppOpsManager.OP_NONE,</div><div class="line">       null, false, false, MY_PID, Process.SYSTEM_UID, 0 /* TODO: Verify */);</div><div class="line"></div><div class="line">                    if (mShowDialogs) &#123;</div><div class="line">   Dialog d = new AppNotRespondingDialog(ActivityManagerService.this,</div><div class="line">           mContext, proc, (ActivityRecord)data.get(&quot;activity&quot;),</div><div class="line">           msg.arg1 != 0);</div><div class="line">   d.show();</div><div class="line">   proc.anrDialog = d;</div><div class="line">                    &#125; else &#123;</div><div class="line">   // Just kill the app if there is no dialog to be shown.</div><div class="line">   killAppAtUsersRequest(proc, null);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<blockquote>
+<p>  顺藤摸瓜，这个对话框弹出的来源消息就是一个<strong>SHOW_NOT_RESPONDING_MSG</strong></p>
+</blockquote>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div></pre></td><td class="code"><pre><div class="line">//这个函数发出**SHOW_NOT_RESPONDING_MSG**消息</div><div class="line">final void appNotResponding(ProcessRecord app, ActivityRecord activity,</div><div class="line">            ActivityRecord parent, boolean aboveSystem, final String annotation) &#123;</div><div class="line">    msg.what = SHOW_NOT_RESPONDING_MSG;</div><div class="line">    msg.obj = map;</div><div class="line">    msg.arg1 = aboveSystem ? 1 : 0;</div><div class="line">    map.put(&quot;app&quot;, app);</div><div class="line">    if (activity != null) &#123;</div><div class="line">        map.put(&quot;activity&quot;, activity);</div><div class="line">    &#125;</div><div class="line">    mUiHandler.sendMessage(msg);</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<h3 id="再来看看有哪些函数调用了这个函数吧。"><a href="#再来看看有哪些函数调用了这个函数吧。" class="headerlink" title="再来看看有哪些函数调用了这个函数吧。"></a>再来看看有哪些函数调用了这个函数吧。</h3><p><img src="https://raw.githubusercontent.com/easternHong/Pictures/master/anr/appNotResponding_traces.png" alt=""></p>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div></pre></td><td class="code"><pre><div class="line">//1.com.android.server.am.ActiveServices#serviceTimeout()</div><div class="line">void serviceTimeout(ProcessRecord proc) &#123;</div><div class="line">    if (anrMessage != null) &#123;</div><div class="line">        mAm.appNotResponding(proc, null, null, false, anrMessage);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div></pre></td><td class="code"><pre><div class="line">//2.com.android.server.am.ActivityManagerService#appNotRespondingViaProvider</div><div class="line">@Override</div><div class="line">public void appNotRespondingViaProvider(IBinder connection) &#123;</div><div class="line">    final long token = Binder.clearCallingIdentity();</div><div class="line">    try &#123;</div><div class="line">        appNotResponding(host, null, null, false, &quot;ContentProvider not responding&quot;);</div><div class="line">    &#125; finally &#123;</div><div class="line">        Binder.restoreCallingIdentity(token);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div><div class="line">15</div><div class="line">16</div><div class="line">17</div><div class="line">18</div><div class="line">19</div></pre></td><td class="code"><pre><div class="line">//3.com.android.server.am.ActivityManagerService#inputDispatchingTimedOut</div><div class="line">//它的调用路径:native-&gt;InputManagerService#notifyANR-&gt;</div><div class="line">/**</div><div class="line"> * Handle input dispatching timeouts.</div><div class="line"> * Returns whether input dispatching should be aborted or not.</div><div class="line"> */</div><div class="line">public boolean inputDispatchingTimedOut(final ProcessRecord proc,</div><div class="line">        final ActivityRecord activity, final ActivityRecord parent,</div><div class="line">        final boolean aboveSystem, String reason) &#123;</div><div class="line">        ...</div><div class="line">        mHandler.post(new Runnable() &#123;</div><div class="line">            @Override</div><div class="line">            public void run() &#123;</div><div class="line">                appNotResponding(proc, activity, parent, aboveSystem, annotation);</div><div class="line">               &#125;</div><div class="line">           &#125;);</div><div class="line">       &#125;</div><div class="line">    return true;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+<figure class="highlight plain"><table><tr><td class="gutter"><pre><div class="line">1</div><div class="line">2</div><div class="line">3</div><div class="line">4</div><div class="line">5</div><div class="line">6</div><div class="line">7</div><div class="line">8</div><div class="line">9</div><div class="line">10</div><div class="line">11</div><div class="line">12</div><div class="line">13</div><div class="line">14</div></pre></td><td class="code"><pre><div class="line">//4.com.android.server.am.BroadcastQueue$AppNotResponding</div><div class="line">//默认timeout：10s.</div><div class="line">private final class AppNotResponding implements Runnable &#123;</div><div class="line">    private final ProcessRecord mApp;</div><div class="line">    private final String mAnnotation;</div><div class="line">    public AppNotResponding(ProcessRecord app, String annotation) &#123;</div><div class="line">        mApp = app;</div><div class="line">        mAnnotation = annotation;</div><div class="line">    &#125;</div><div class="line">    @Override</div><div class="line">    public void run() &#123;</div><div class="line">        mService.appNotResponding(mApp, null, null, false, mAnnotation);</div><div class="line">    &#125;</div><div class="line">&#125;</div></pre></td></tr></table></figure>
+
+      
+    </div>
+    <footer class="article-footer">
+      <a data-url="http://yoursite.com/2017/09/26/ANR原理记录/" data-id="cj819kg5g00008iq8e79y7ivs" class="article-share-link">Share</a>
+      
+      
+    </footer>
+  </div>
+  
+</article>
+
+
+  
+
+</section>
+        
+          <aside id="sidebar">
+  
+    
+
+  
+    
+
+  
+    
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Archives</h3>
+    <div class="widget">
+      <ul class="archive-list"><li class="archive-list-item"><a class="archive-list-link" href="/archives/2017/09/">September 2017</a></li></ul>
+    </div>
+  </div>
+
+
+  
+    
+  <div class="widget-wrap">
+    <h3 class="widget-title">Recent Posts</h3>
+    <div class="widget">
+      <ul>
+        
+          <li>
+            <a href="/2017/09/26/ANR原理记录/">ANR原理记录</a>
+          </li>
+        
+      </ul>
+    </div>
+  </div>
+
+  
+</aside>
+        
+      </div>
+      <footer id="footer">
+  
+  <div class="outer">
+    <div id="footer-info" class="inner">
+      &copy; 2017 Dong Sheng Hong<br>
+      Powered by <a href="http://hexo.io/" target="_blank">Hexo</a>
+    </div>
+  </div>
+</footer>
+    </div>
+    <nav id="mobile-nav">
+  
+    <a href="/" class="mobile-nav-link">Home</a>
+  
+    <a href="/archives" class="mobile-nav-link">Archives</a>
+  
+</nav>
+    
+
+<script src="//ajax.googleapis.com/ajax/libs/jquery/2.0.3/jquery.min.js"></script>
+
+
+  <link rel="stylesheet" href="/fancybox/jquery.fancybox.css">
+  <script src="/fancybox/jquery.fancybox.pack.js"></script>
+
+
+<script src="/js/script.js"></script>
+
+  </div>
+</body>
+</html>
